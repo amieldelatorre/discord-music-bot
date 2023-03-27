@@ -7,7 +7,6 @@ bootstrap:
 refresh:
 	docker container stop ${name}
 	docker container rm ${name}
-	docker image rm ${name}
 	docker build -t ${name} .
 	docker compose up -d
 
