@@ -46,7 +46,8 @@ class YTDLSource(discord.PCMVolumeTransformer):
             discord.FFmpegPCMAudio(
                 filename,
                 # https://ffmpeg.org/ffmpeg-protocols.html#http
-                before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_on_network_error 1 -reconnect_on_http_error 1 -reconnect_delay_max 60",
+                # -reconnect_on_network_error 1 -reconnect_on_http_error 1 left out
+                before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
                 **ffmpeg_options),
             data=data
         )
