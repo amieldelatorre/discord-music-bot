@@ -278,6 +278,47 @@ async def on_ready():
     print('-' * len(running_message))
 
 
+@bot.event
+async def on_voice_state_update(member, before, after):
+    channel_before = before.channel
+    channel_after = after.channel
+
+    if len(bot.voice_clients) == 0:
+        return
+
+    if channel_before is not None and (channel_after is None or channel_before != channel_after):
+        if len(before.channel.members) == 1 and bot_in_voice_channel(channel_before):
+            voice_client = get_voice_client(channel_before)
+
+            if voice_client.is_playing():
+                voice_client.stop()
+
+            if voice_client.guild.id in bot.get_cog("Music").queues:
+                del bot.get_cog("Music").queues[voice_client.guild.id]
+                del bot.get_cog("Music").now_playing[voice_client.guild.id]
+            return await voice_client.disconnect()
+    else:
+        return
+
+
+def bot_in_voice_channel(channel) -> bool:
+    """Checks if the bot is in the matching channel"""
+
+    for voice_client in bot.voice_clients:
+        if voice_client.channel == channel:
+            return True
+    return False
+
+
+def get_voice_client(channel):
+    """Gets the matching voice client, does not check if channel exists. Returns None if no channels are found"""
+
+    for voice_client in bot.voice_clients:
+        if voice_client.channel == channel:
+            return voice_client
+    return None
+
+
 async def main():
     async with bot:
         load_dotenv()
