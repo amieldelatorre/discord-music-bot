@@ -27,7 +27,7 @@ class Music(commands.Cog):
         await ctx.guild.change_voice_state(channel=voice_channel, self_mute=False, self_deaf=True)
 
         voice_client = ctx.voice_client
-        await asyncio.sleep(5)
+        await asyncio.sleep(30)
         if not voice_client.is_playing():
             asyncio.run_coroutine_threadsafe(self.leave(ctx), self.bot.loop)
             asyncio.run_coroutine_threadsafe(ctx.send("Leaving due to inactivity."), self.bot.loop)
@@ -101,7 +101,7 @@ class Music(commands.Cog):
                 f'{player.data["original_url"]}'
             ), self.bot.loop)
         else:
-            await asyncio.sleep(5)
+            await asyncio.sleep(30)
             if not voice_client.is_playing():
                 asyncio.run_coroutine_threadsafe(self.leave(ctx), self.bot.loop)
                 asyncio.run_coroutine_threadsafe(ctx.send("Leaving due to inactivity."), self.bot.loop)
