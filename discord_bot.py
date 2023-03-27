@@ -52,10 +52,12 @@ class Music(commands.Cog):
         if ctx.voice_client.is_playing():
             self.queues[guild_id].append(url)
 
-            return await ctx.send(
+            await ctx.send(
                 f'Added song {url} to queue.\n'
                 f'*Number of items in queue*: {len(self.queues[guild_id])}'
             )
+            return await self.queue(ctx)
+
         else:
             async with ctx.typing():
                 player = await YTDLSource.from_url(self.queues[guild_id].pop(0), loop=self.bot.loop, stream=True)
@@ -233,6 +235,33 @@ class Music(commands.Cog):
         return await self.play_next(ctx)
 
     @commands.command()
+    async def queue_move(self, ctx, index_from: int, index_to: int):
+        """Moves a song from its original position in the queue to a new position"""
+
+        guild_id = ctx.guild.id
+        if guild_id not in self.queues or len(self.queues[guild_id]) == 0:
+            return await ctx.send("There are currently no songs in the queue!")
+
+        original_queue_length = len(self.queues[guild_id])
+
+        if index_from < 1 or index_to < 1 or index_from > original_queue_length or index_to > original_queue_length:
+            return await ctx.send(f"The values have to be within the range of *1 - {original_queue_length}!*")
+        elif index_from == index_to:
+            return await ctx.send(f"The song is already in that position!")
+
+        await ctx.send(f"Moving the song in position {index_from} to {index_to} of the queue.")
+        if index_to == original_queue_length:
+            song = self.queues[guild_id].pop(index_from - 1)
+            self.queues[guild_id].append(song)
+        else:
+            new_index = index_to - 1
+            song = self.queues[guild_id].pop(index_from - 1)
+            self.queues[guild_id].insert(new_index, song)
+
+        await ctx.send(f"Moved the song in position {index_from} to {index_to} of the queue.")
+        return await self.queue(ctx)
+
+    @commands.command()
     async def volume(self, ctx, *, volume: int = None):
         """Shows current volume"""
 
@@ -272,10 +301,6 @@ class Music(commands.Cog):
             else:
                 await ctx.send("You are not connected to a voice channel!")
                 raise commands.CommandError("Author not connected to a voice channel!")
-        elif ctx.voice_client.is_playing():
-            # queue the song
-            # ctx.voice_client.stop()
-            pass
 
 
 intents = discord.Intents.default()
