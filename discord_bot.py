@@ -47,19 +47,18 @@ class Music(commands.Cog):
         await ctx.send(f'***Searching for song:*** {url}')
 
         if guild_id not in self.queues:
-            self.queues[guild_id] = [await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)]
+            self.queues[guild_id] = [url]
 
         if ctx.voice_client.is_playing():
-            player = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
-            self.queues[guild_id].append(player)
+            self.queues[guild_id].append(url)
 
             return await ctx.send(
-                f'Added song {player.data["original_url"]} to queue.\n'
+                f'Added song {url} to queue.\n'
                 f'*Number of items in queue*: {len(self.queues[guild_id])}'
             )
         else:
             async with ctx.typing():
-                player = self.queues[guild_id].pop(0)
+                player = await YTDLSource.from_url(self.queues[guild_id].pop(0), loop=self.bot.loop, stream=True)
 
                 self.now_playing[guild_id] = {
                     "title": player.title,
@@ -182,8 +181,8 @@ class Music(commands.Cog):
         else:
             song_list = ""
             num = 1
-            for player in self.queues[ctx.guild.id]:
-                song_list += f"> **{num}.** {player.title}\n"
+            for url in self.queues[ctx.guild.id]:
+                song_list += f"> **{num}.** {url}\n"
                 num += 1
 
             return await ctx.send(
