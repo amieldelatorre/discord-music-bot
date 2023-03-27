@@ -79,7 +79,7 @@ class Music(commands.Cog):
         del self.now_playing[guild_id]
 
         if guild_id in self.queues and len(self.queues[guild_id]) >= 1:
-            player = self.queues[guild_id].pop(0)
+            player = await YTDLSource.from_url(self.queues[guild_id].pop(0), loop=self.bot.loop, stream=True)
 
             self.now_playing[guild_id] = {
                 "title": player.title,
@@ -108,30 +108,6 @@ class Music(commands.Cog):
             f'***Current Song:*** {self.now_playing[guild_id]["title"]}\n'
             f'{self.now_playing[guild_id]["url"]}'
         )
-
-    @commands.command()
-    async def queue_swap(self, ctx, first: int, second: int):
-        """Swaps the positions of two songs in the queue"""
-
-        guild_id = ctx.guild.id
-        if guild_id not in self.queues or len(self.queues[guild_id]) == 0:
-            return await ctx.send("There are currently no songs in the queue!")
-
-        queue_length = len(self.queues[guild_id])
-
-        if first < 1 or second < 1 or second > queue_length or second > queue_length:
-            return await ctx.send(f"The values have to be within the range of *1 - {queue_length}!*")
-
-        position1 = first - 1
-        position2 = second - 1
-
-        await ctx.send(f"Swapping the songs in position {first} and {second} of the queue.")
-        temp = self.queues[guild_id][position1]
-        self.queues[guild_id][position1] = self.queues[guild_id][position2]
-        self.queues[guild_id][position2] = temp
-        await ctx.send(f"Swapped the songs in position {first} and {second} of the queue.")
-
-        await self.queue(ctx)
 
     @commands.command()
     async def pause(self, ctx):
@@ -201,13 +177,60 @@ class Music(commands.Cog):
 
         if guild_id not in self.queues or len(self.queues[guild_id]) == 0:
             return await ctx.send("There are currently no songs in the queue!")
-        if index < 1:
-            return await ctx.send("The index to remove from queue cannot be less than 1!")
-        if index > len(self.queues[guild_id]):
-            return await ctx.send("The index cannot be greater than the length of the queue!")
+        if index < 1 or index > len(self.queues[guild_id]):
+            await ctx.send(f"The values have to be within the range of *1 - {len(self.queues[guild_id])}!*")
+            return await self.queue(ctx)
 
-        player = self.queues[guild_id].pop(index - 1)
-        return await ctx.send(f"Removed the song from queue: {player.title}")
+        url = self.queues[guild_id].pop(index - 1)
+        await ctx.send(f"Removed the song from queue: {url}")
+        return await self.queue(ctx)
+
+    @commands.command()
+    async def queue_swap(self, ctx, first: int, second: int):
+        """Swaps the positions of two songs in the queue"""
+
+        guild_id = ctx.guild.id
+        if guild_id not in self.queues or len(self.queues[guild_id]) == 0:
+            return await ctx.send("There are currently no songs in the queue!")
+
+        queue_length = len(self.queues[guild_id])
+
+        if first < 1 or second < 1 or first > queue_length or second > queue_length:
+            await ctx.send(f"The values have to be within the range of *1 - {queue_length}!*")
+            return await self.queue(ctx)
+
+        position1 = first - 1
+        position2 = second - 1
+
+        await ctx.send(f"Swapping the songs in position *{first}* and *{second}* of the queue.")
+        temp = self.queues[guild_id][position1]
+        self.queues[guild_id][position1] = self.queues[guild_id][position2]
+        self.queues[guild_id][position2] = temp
+        await ctx.send(f"Swapped the songs in position *{first}* and *{second}* of the queue.")
+
+        await self.queue(ctx)
+
+    @commands.command()
+    async def queue_jump(self, ctx, position: int):
+        """Jumps to a position in the queue, skipping everything in between"""
+
+        guild_id = ctx.guild.id
+        if guild_id not in self.queues or len(self.queues[guild_id]) == 0:
+            return await ctx.send("There are currently no songs in the queue!")
+
+        original_queue_length = len(self.queues[guild_id])
+        if position < 1 or position > original_queue_length:
+            await ctx.send(f"The values have to be within the range of *1 - {original_queue_length}!*")
+            return await self.queue(ctx)
+
+        if ctx.voice_client.is_playing():
+            ctx.voice_client.stop()
+
+        del self.queues[guild_id][:position-1]
+
+        await ctx.send(f"Jumping to the song in position *{position}* of the queue.")
+        await self.queue(ctx)
+        return await self.play_next(ctx)
 
     @commands.command()
     async def volume(self, ctx, *, volume: int = None):
