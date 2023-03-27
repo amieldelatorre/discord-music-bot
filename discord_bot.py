@@ -26,6 +26,12 @@ class Music(commands.Cog):
             await ctx.voice_client.move_to(voice_channel)
         await ctx.guild.change_voice_state(channel=voice_channel, self_mute=False, self_deaf=True)
 
+        voice_client = ctx.voice_client
+        await asyncio.sleep(5)
+        if not voice_client.is_playing():
+            asyncio.run_coroutine_threadsafe(self.leave(ctx), self.bot.loop)
+            asyncio.run_coroutine_threadsafe(ctx.send("Leaving due to inactivity."), self.bot.loop)
+
     @commands.command()
     async def leave(self, ctx):
         """Leaves a voice channel"""
@@ -94,11 +100,11 @@ class Music(commands.Cog):
                 f'***Now playing:*** {player.title}\n'
                 f'{player.data["original_url"]}'
             ), self.bot.loop)
-        # else:
-        #     asyncio.sleep(90)
-        #     if not voice_client.is_playing():
-        #         asyncio.run_coroutine_threadsafe(voice_client.disconnect(), self.bot.loop)
-        #         asyncio.run_coroutine_threadsafe(ctx.send("No more songs in queue."), self.bot.loop)
+        else:
+            await asyncio.sleep(5)
+            if not voice_client.is_playing():
+                asyncio.run_coroutine_threadsafe(self.leave(ctx), self.bot.loop)
+                asyncio.run_coroutine_threadsafe(ctx.send("Leaving due to inactivity."), self.bot.loop)
 
     @commands.command()
     async def now_playing(self, ctx):
