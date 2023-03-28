@@ -1,16 +1,34 @@
 import asyncio
 import os
 import discord
+import logging
 from dotenv import load_dotenv
 from discord.ext import commands
 from ytdl import YTDLSource
+from data.InMemoryDb import InMemoryDb
 
 
 class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.queues = {}
-        self.now_playing = {}
+        self.db = InMemoryDb()
+
+    async def auto_disconnect(self, ctx):
+        voice_client = ctx.voice_client
+        await asyncio.sleep(30)
+        if not voice_client.is_playing():
+            asyncio.run_coroutine_threadsafe(self.leave(ctx), self.bot.loop)
+            asyncio.run_coroutine_threadsafe(ctx.send("Leaving due to inactivity."), self.bot.loop)
+
+    def clean_up(self, guild_id):
+        self.db.delete_queue(guild_id)
+        self.db.now_playing(guild_id)
+
+    def is_there_item_in_queue(self, guild_id):
+        return self.db.guild_id_in_queues(guild_id) and self.db.queue_size(guild_id) > 0
+
+    def is_index_valid(self, index, guild_id):
+        return index >= 1 or index <= self.db.queue_size(guild_id)
 
     @commands.command()
     async def join(self, ctx):
@@ -26,11 +44,7 @@ class Music(commands.Cog):
             await ctx.voice_client.move_to(voice_channel)
         await ctx.guild.change_voice_state(channel=voice_channel, self_mute=False, self_deaf=True)
 
-        voice_client = ctx.voice_client
-        await asyncio.sleep(30)
-        if not voice_client.is_playing():
-            asyncio.run_coroutine_threadsafe(self.leave(ctx), self.bot.loop)
-            asyncio.run_coroutine_threadsafe(ctx.send("Leaving due to inactivity."), self.bot.loop)
+        await self.auto_disconnect(ctx)
 
     @commands.command()
     async def leave(self, ctx):
@@ -40,59 +54,42 @@ class Music(commands.Cog):
         if voice_client is not None and voice_client.is_connected():
             await voice_client.disconnect()
             await ctx.send("Disconnected from the voice channel.")
-            del self.queues[ctx.guild.id]
-            del self.now_playing[ctx.guild.id]
+            self.clean_up(ctx.guild.id)
         else:
             await ctx.send("Not connected to a voice channel.")
 
     @commands.command()
     async def play(self, ctx, *, url):
-        """Streams from a url (does not pre-download)"""
+        """Downloads and then plays"""
 
         guild_id = ctx.guild.id
         await ctx.send(f'***Searching for song:*** {url}')
 
-        if guild_id not in self.queues:
-            self.queues[guild_id] = [url]
-
+        self.db.add_to_queue(guild_id, url)
         if ctx.voice_client.is_playing():
-            self.queues[guild_id].append(url)
-
             await ctx.send(
                 f'Added song {url} to queue.\n'
-                f'*Number of items in queue*: {len(self.queues[guild_id])}'
+                f'*Number of items in queue*: {self.db.queue_size(guild_id)}'
             )
             return await self.queue(ctx)
 
         else:
-            async with ctx.typing():
-                player = await YTDLSource.from_url(self.queues[guild_id].pop(0), loop=self.bot.loop, stream=True)
+            voice_client = ctx.voice_client
+            await self.play_song(ctx, guild_id, voice_client)
 
-                self.now_playing[guild_id] = {
-                    "title": player.title,
-                    "url": player.data["original_url"]
-                }
+    async def play_song(self, ctx, guild_id, voice_client):
+        async with ctx.typing():
+            queue = self.db.get_queue_with_guild_id(guild_id)
+            url = queue.pop(0)
+            self.db.set_queue(guild_id, queue)
+            player = await YTDLSource.from_url(url, loop=self.bot.loop)
 
-                ctx.voice_client.play(player, after=lambda x=None: asyncio.run_coroutine_threadsafe(self.play_next(ctx), self.bot.loop))
-
-            await ctx.send(
-                f'***Now playing:*** {player.title}\n'
-                f'{player.data["original_url"]}'
-            )
-
-    async def play_next(self, ctx):
-        guild_id = ctx.guild.id
-        voice_client = ctx.voice_client
-
-        del self.now_playing[guild_id]
-
-        if guild_id in self.queues and len(self.queues[guild_id]) >= 1:
-            player = await YTDLSource.from_url(self.queues[guild_id].pop(0), loop=self.bot.loop, stream=True)
-
-            self.now_playing[guild_id] = {
+            now_playing = {
                 "title": player.title,
                 "url": player.data["original_url"]
             }
+
+            self.db.add_to_now_playing(guild_id, now_playing)
 
             voice_client.play(player,
                               after=lambda e: asyncio.run_coroutine_threadsafe(self.play_next(ctx), self.bot.loop))
@@ -100,21 +97,29 @@ class Music(commands.Cog):
                 f'***Now playing:*** {player.title}\n'
                 f'{player.data["original_url"]}'
             ), self.bot.loop)
+
+    async def play_next(self, ctx):
+        guild_id = ctx.guild.id
+        voice_client = ctx.voice_client
+
+        self.db.delete_now_playing(guild_id)
+
+        if self.is_there_item_in_queue(guild_id):
+            await self.play_song(ctx, guild_id, voice_client)
         else:
-            await asyncio.sleep(30)
-            if not voice_client.is_playing():
-                asyncio.run_coroutine_threadsafe(self.leave(ctx), self.bot.loop)
-                asyncio.run_coroutine_threadsafe(ctx.send("Leaving due to inactivity."), self.bot.loop)
+            await self.auto_disconnect(ctx)
 
     @commands.command()
     async def now_playing(self, ctx):
         guild_id = ctx.guild.id
-        if guild_id not in self.now_playing:
+        if self.db.guild_id_in_now_playings(guild_id):
             return await ctx.send("Not currently playing a song!")
 
+        np = self.db.get_now_playing_with_guild_id(guild_id)
+
         await ctx.send(
-            f'***Current Song:*** {self.now_playing[guild_id]["title"]}\n'
-            f'{self.now_playing[guild_id]["url"]}'
+            f'***Current Song:*** {np["title"]}\n'
+            f'{np["url"]}'
         )
 
     @commands.command()
@@ -148,7 +153,7 @@ class Music(commands.Cog):
         if not ctx.voice_client.is_playing():
             return await ctx.send("Not currently playing a song!")
 
-        if len(self.queues[ctx.guild.id]) == 0:
+        if self.db.queue_size(ctx.guild.id) == 0:
             await ctx.send(
                 "This is the last song in the queue!\n"
                 "Stopping the song."
@@ -160,17 +165,17 @@ class Music(commands.Cog):
     async def queue(self, ctx):
         """Shows current queue"""
 
-        if ctx.guild.id not in self.queues or len(self.queues[ctx.guild.id]) == 0:
+        if not self.is_there_item_in_queue(ctx.guild.id):
             return await ctx.send("There are currently no songs in the queue!")
         else:
             song_list = ""
             num = 1
-            for url in self.queues[ctx.guild.id]:
+            for url in self.db.get_queue_with_guild_id(ctx.guild.id):
                 song_list += f"> **{num}.** {url}\n"
                 num += 1
 
             return await ctx.send(
-                f"Number of songs in queue: {len(self.queues[ctx.guild.id])}\n"
+                f"Number of songs in queue: {self.db.queue_size(ctx.guild.id)}\n"
                 f"{song_list}"
             )
 
@@ -183,13 +188,16 @@ class Music(commands.Cog):
 
         guild_id = ctx.guild.id
 
-        if guild_id not in self.queues or len(self.queues[guild_id]) == 0:
+        if not self.is_there_item_in_queue(ctx.guild.id):
             return await ctx.send("There are currently no songs in the queue!")
-        if index < 1 or index > len(self.queues[guild_id]):
-            await ctx.send(f"The values have to be within the range of *1 - {len(self.queues[guild_id])}!*")
+        if not self.is_index_valid(index, guild_id):
+            await ctx.send(f"The values have to be within the range of *1 - {self.db.queue_size(guild_id)}!*")
             return await self.queue(ctx)
 
-        url = self.queues[guild_id].pop(index - 1)
+        queue = self.db.get_queue_with_guild_id(guild_id)
+        url = queue.pop(index - 1)
+        self.db.set_queue(guild_id, queue)
+
         await ctx.send(f"Removed the song from queue: {url}")
         return await self.queue(ctx)
 
@@ -198,12 +206,12 @@ class Music(commands.Cog):
         """Swaps the positions of two songs in the queue"""
 
         guild_id = ctx.guild.id
-        if guild_id not in self.queues or len(self.queues[guild_id]) == 0:
+        if not self.is_there_item_in_queue(guild_id):
             return await ctx.send("There are currently no songs in the queue!")
 
-        queue_length = len(self.queues[guild_id])
+        queue_length = self.db.queue_size(guild_id)
 
-        if first < 1 or second < 1 or first > queue_length or second > queue_length:
+        if not self.is_index_valid(first, guild_id) or not self.is_index_valid(second, guild_id):
             await ctx.send(f"The values have to be within the range of *1 - {queue_length}!*")
             return await self.queue(ctx)
 
@@ -211,11 +219,14 @@ class Music(commands.Cog):
         position2 = second - 1
 
         await ctx.send(f"Swapping the songs in position *{first}* and *{second}* of the queue.")
-        temp = self.queues[guild_id][position1]
-        self.queues[guild_id][position1] = self.queues[guild_id][position2]
-        self.queues[guild_id][position2] = temp
-        await ctx.send(f"Swapped the songs in position *{first}* and *{second}* of the queue.")
 
+        queue = self.db.get_queue_with_guild_id(guild_id)
+        temp = queue[position1]
+        queue[position1] = queue[position2]
+        queue[position2] = temp
+        self.db.set_queue(guild_id, queue)
+
+        await ctx.send(f"Swapped the songs in position *{first}* and *{second}* of the queue.")
         await self.queue(ctx)
 
     @commands.command()
@@ -223,18 +234,20 @@ class Music(commands.Cog):
         """Jumps to a position in the queue, skipping everything in between"""
 
         guild_id = ctx.guild.id
-        if guild_id not in self.queues or len(self.queues[guild_id]) == 0:
+        if not self.is_there_item_in_queue(guild_id):
             return await ctx.send("There are currently no songs in the queue!")
 
-        original_queue_length = len(self.queues[guild_id])
-        if position < 1 or position > original_queue_length:
+        original_queue_length = self.db.queue_size(guild_id)
+        if not self.is_index_valid(position, guild_id):
             await ctx.send(f"The values have to be within the range of *1 - {original_queue_length}!*")
             return await self.queue(ctx)
 
         if ctx.voice_client.is_playing():
             ctx.voice_client.stop()
 
-        del self.queues[guild_id][:position-1]
+        queue = self.db.get_queue_with_guild_id(guild_id)
+        del queue[:position-1]
+        self.db.set_queue(guild_id, queue)
 
         await ctx.send(f"Jumping to the song in position *{position}* of the queue.")
         await self.queue(ctx)
@@ -245,20 +258,22 @@ class Music(commands.Cog):
         """Moves a song from its original position in the queue to a new position"""
 
         guild_id = ctx.guild.id
-        if guild_id not in self.queues or len(self.queues[guild_id]) == 0:
+        if not self.is_there_item_in_queue(guild_id):
             return await ctx.send("There are currently no songs in the queue!")
 
-        original_queue_length = len(self.queues[guild_id])
+        original_queue_length = self.db.queue_size(guild_id)
 
-        if index_from < 1 or index_to < 1 or index_from > original_queue_length or index_to > original_queue_length:
+        if not self.is_index_valid(index_from, guild_id) or not self.is_index_valid(index_to, guild_id):
             return await ctx.send(f"The values have to be within the range of *1 - {original_queue_length}!*")
         elif index_from == index_to:
             return await ctx.send(f"The song is already in that position!")
 
         await ctx.send(f"Moving the song in position {index_from} to {index_to} of the queue.")
 
-        song = self.queues[guild_id].pop(index_from - 1)
-        self.queues[guild_id].insert(index_to - 1, song)
+        queue = self.db.get_queue_with_guild_id(guild_id)
+        song = queue.pop(index_from - 1)
+        queue[guild_id].insert(index_to - 1, song)
+        self.db.set_queue(guild_id, queue)
 
         await ctx.send(f"Moved the song in position {index_from} to {index_to} of the queue.")
         return await self.queue(ctx)
@@ -344,8 +359,7 @@ async def on_voice_state_update(member, before, after):
                 voice_client.stop()
 
             if voice_client.guild.id in bot.get_cog("Music").queues:
-                del bot.get_cog("Music").queues[voice_client.guild.id]
-                del bot.get_cog("Music").now_playing[voice_client.guild.id]
+                bot.get_cog("Music").clean_up(voice_client.guild.id)
             return await voice_client.disconnect()
     else:
         return
@@ -373,5 +387,10 @@ async def main():
     async with bot:
         load_dotenv()
         DISCORD_TOKEN = os.getenv("discord_token")
+        LOGGING_LEVEL = os.getenv("logging_level")
+        logging.basicConfig(level=LOGGING_LEVEL)
+        logger = logging.getLogger()
+
+        bot.logger = logger
         await bot.add_cog(Music(bot))
         await bot.start(DISCORD_TOKEN)
