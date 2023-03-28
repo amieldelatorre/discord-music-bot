@@ -31,3 +31,12 @@ class IDb(abc.ABC):
 
     def delete_now_playing(self, guild_id):
         pass
+
+    def guild_id_in_queues(self, guild_id):
+        pass
+
+    def guild_id_in_now_playings(self, guild_id):
+        pass
+
+    def queue_size(self, guild_id):
+        pass

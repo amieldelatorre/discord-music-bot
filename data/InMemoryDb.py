@@ -1,4 +1,4 @@
-import IDb
+from .IDb import IDb
 
 
 class InMemoryDb(IDb):
