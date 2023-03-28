@@ -1,6 +1,7 @@
 import asyncio
 import os
 import discord
+import logging
 from dotenv import load_dotenv
 from discord.ext import commands
 from ytdl import YTDLSource
@@ -11,6 +12,14 @@ class Music(commands.Cog):
         self.bot = bot
         self.queues = {}
         self.now_playing = {}
+
+    async def auto_disconnect(self, ctx):
+        pass
+        voice_client = ctx.voice_client
+        await asyncio.sleep(5)
+        if not voice_client.is_playing():
+            asyncio.run_coroutine_threadsafe(self.leave(ctx), self.bot.loop)
+            asyncio.run_coroutine_threadsafe(ctx.send("Leaving due to inactivity."), self.bot.loop)
 
     @commands.command()
     async def join(self, ctx):
@@ -26,11 +35,7 @@ class Music(commands.Cog):
             await ctx.voice_client.move_to(voice_channel)
         await ctx.guild.change_voice_state(channel=voice_channel, self_mute=False, self_deaf=True)
 
-        voice_client = ctx.voice_client
-        await asyncio.sleep(30)
-        if not voice_client.is_playing():
-            asyncio.run_coroutine_threadsafe(self.leave(ctx), self.bot.loop)
-            asyncio.run_coroutine_threadsafe(ctx.send("Leaving due to inactivity."), self.bot.loop)
+        await self.auto_disconnect(ctx)
 
     @commands.command()
     async def leave(self, ctx):
@@ -65,29 +70,12 @@ class Music(commands.Cog):
             return await self.queue(ctx)
 
         else:
-            async with ctx.typing():
-                player = await YTDLSource.from_url(self.queues[guild_id].pop(0), loop=self.bot.loop, stream=True)
+            voice_client = ctx.voice_client
+            await self.play_song(ctx, guild_id, voice_client)
 
-                self.now_playing[guild_id] = {
-                    "title": player.title,
-                    "url": player.data["original_url"]
-                }
-
-                ctx.voice_client.play(player, after=lambda x=None: asyncio.run_coroutine_threadsafe(self.play_next(ctx), self.bot.loop))
-
-            await ctx.send(
-                f'***Now playing:*** {player.title}\n'
-                f'{player.data["original_url"]}'
-            )
-
-    async def play_next(self, ctx):
-        guild_id = ctx.guild.id
-        voice_client = ctx.voice_client
-
-        del self.now_playing[guild_id]
-
-        if guild_id in self.queues and len(self.queues[guild_id]) >= 1:
-            player = await YTDLSource.from_url(self.queues[guild_id].pop(0), loop=self.bot.loop, stream=True)
+    async def play_song(self, ctx, guild_id, voice_client):
+        async with ctx.typing():
+            player = await YTDLSource.from_url(self.queues[guild_id].pop(0), loop=self.bot.loop)
 
             self.now_playing[guild_id] = {
                 "title": player.title,
@@ -100,11 +88,17 @@ class Music(commands.Cog):
                 f'***Now playing:*** {player.title}\n'
                 f'{player.data["original_url"]}'
             ), self.bot.loop)
+
+    async def play_next(self, ctx):
+        guild_id = ctx.guild.id
+        voice_client = ctx.voice_client
+
+        del self.now_playing[guild_id]
+
+        if guild_id in self.queues and len(self.queues[guild_id]) >= 1:
+            await self.play_song(ctx, guild_id, voice_client)
         else:
-            await asyncio.sleep(30)
-            if not voice_client.is_playing():
-                asyncio.run_coroutine_threadsafe(self.leave(ctx), self.bot.loop)
-                asyncio.run_coroutine_threadsafe(ctx.send("Leaving due to inactivity."), self.bot.loop)
+            await self.auto_disconnect(ctx)
 
     @commands.command()
     async def now_playing(self, ctx):
@@ -373,5 +367,10 @@ async def main():
     async with bot:
         load_dotenv()
         DISCORD_TOKEN = os.getenv("discord_token")
+        LOGGING_LEVEL = os.getenv("logging_level")
+        logging.basicConfig(level=LOGGING_LEVEL)
+        logger = logging.getLogger()
+
+        bot.logger = logger
         await bot.add_cog(Music(bot))
         await bot.start(DISCORD_TOKEN)

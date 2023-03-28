@@ -14,6 +14,8 @@ ytdl_format_options = {
     'no_warnings': True,
     'default_search': 'auto',
     'source_address': '0.0.0.0',  # bind to ipv4 since ipv6 addresses cause issues sometimes
+    'before_options': "-reconnect 1 -reconnect_streamed 1  -reconnect_on_network_error 1 -reconnect_on_http_error 1 -reconnect_delay_max 5"
+    # https://ffmpeg.org/ffmpeg-protocols.html#http
 }
 
 ffmpeg_options = {
@@ -45,9 +47,6 @@ class YTDLSource(discord.PCMVolumeTransformer):
         return cls(
             discord.FFmpegPCMAudio(
                 filename,
-                # https://ffmpeg.org/ffmpeg-protocols.html#http
-                # -reconnect_on_network_error 1 -reconnect_on_http_error 1 left out
-                before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
                 **ffmpeg_options),
             data=data
         )
