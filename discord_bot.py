@@ -65,12 +65,8 @@ class Music(commands.Cog):
         guild_id = ctx.guild.id
         await ctx.send(f'***Searching for song:*** {url}')
 
-        if not self.db.guild_id_in_queues(guild_id):
-            self.db.add_to_queue(guild_id, url)
-
+        self.db.add_to_queue(guild_id, url)
         if ctx.voice_client.is_playing():
-            self.db.add_to_queue(guild_id, url)
-
             await ctx.send(
                 f'Added song {url} to queue.\n'
                 f'*Number of items in queue*: {self.db.queue_size(guild_id)}'
