@@ -256,13 +256,9 @@ class Music(commands.Cog):
             return await ctx.send(f"The song is already in that position!")
 
         await ctx.send(f"Moving the song in position {index_from} to {index_to} of the queue.")
-        if index_to == original_queue_length:
-            song = self.queues[guild_id].pop(index_from - 1)
-            self.queues[guild_id].append(song)
-        else:
-            new_index = index_to - 1
-            song = self.queues[guild_id].pop(index_from - 1)
-            self.queues[guild_id].insert(new_index, song)
+
+        song = self.queues[guild_id].pop(index_from - 1)
+        self.queues[guild_id].insert(index_to - 1, song)
 
         await ctx.send(f"Moved the song in position {index_from} to {index_to} of the queue.")
         return await self.queue(ctx)
