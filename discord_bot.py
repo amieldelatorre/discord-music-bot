@@ -88,10 +88,12 @@ class Music(commands.Cog):
             self.db.set_queue(guild_id, queue)
             player = await YTDLSource.from_url(url, loop=self.bot.loop)
 
-            self.now_playing[guild_id] = {
+            now_playing = {
                 "title": player.title,
                 "url": player.data["original_url"]
             }
+
+            self.db.add_to_now_playing(guild_id, now_playing)
 
             voice_client.play(player,
                               after=lambda e: asyncio.run_coroutine_threadsafe(self.play_next(ctx), self.bot.loop))
@@ -104,9 +106,9 @@ class Music(commands.Cog):
         guild_id = ctx.guild.id
         voice_client = ctx.voice_client
 
-        del self.now_playing[guild_id]
+        self.db.delete_now_playing(guild_id)
 
-        if self.db.guild_id_in_queues(guild_id) and self.db.queue_size(guild_id) >= 1:
+        if self.is_there_item_in_queue(guild_id):
             await self.play_song(ctx, guild_id, voice_client)
         else:
             await self.auto_disconnect(ctx)
@@ -114,12 +116,14 @@ class Music(commands.Cog):
     @commands.command()
     async def now_playing(self, ctx):
         guild_id = ctx.guild.id
-        if guild_id not in self.now_playing:
+        if self.db.guild_id_in_now_playings(guild_id):
             return await ctx.send("Not currently playing a song!")
 
+        np = self.db.get_now_playing_with_guild_id(guild_id)
+
         await ctx.send(
-            f'***Current Song:*** {self.now_playing[guild_id]["title"]}\n'
-            f'{self.now_playing[guild_id]["url"]}'
+            f'***Current Song:*** {np["title"]}\n'
+            f'{np["url"]}'
         )
 
     @commands.command()
