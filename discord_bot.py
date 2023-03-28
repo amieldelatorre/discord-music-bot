@@ -60,7 +60,7 @@ class Music(commands.Cog):
 
     @commands.command()
     async def play(self, ctx, *, url):
-        """Streams from a url (does not pre-download)"""
+        """Downloads and then plays"""
 
         guild_id = ctx.guild.id
         await ctx.send(f'***Searching for song:*** {url}')
