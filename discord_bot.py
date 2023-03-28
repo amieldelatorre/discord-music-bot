@@ -143,9 +143,9 @@ class Music(commands.Cog):
         """Pauses the paused song"""
         if ctx.voice_client is None:
             return await ctx.send("Not connected to a voice channel!")
-        if ctx.voice_client.is_playing():
+        elif ctx.voice_client.is_playing():
             return await ctx.send("Already playing a song!")
-        if not ctx.voice_client.is_paused():
+        elif not ctx.voice_client.is_paused():
             return await ctx.send("There is no song paused!")
 
         ctx.voice_client.resume()
@@ -157,11 +157,11 @@ class Music(commands.Cog):
 
         if ctx.voice_client is None:
             return await ctx.send("Not connected to a voice channel!")
-        if not ctx.voice_client.is_playing():
+        elif not ctx.voice_client.is_playing():
             return await ctx.send("Not currently playing a song!")
-
-        if self.db.queue_size(ctx.guild.id) == 0:
+        elif self.db.queue_size(ctx.guild.id) == 0:
             await ctx.send("This is the last song in the queue!")
+
         await self.stop(ctx)
         await self.play_next(ctx)
 
@@ -194,7 +194,7 @@ class Music(commands.Cog):
 
         if not self.is_there_item_in_queue(ctx.guild.id):
             return await ctx.send("There are currently no songs in the queue!")
-        if not self.is_index_valid(index, guild_id):
+        elif not self.is_index_valid(index, guild_id):
             await ctx.send(f"The values have to be within the range of *1 - {self.db.queue_size(guild_id)}!*")
             return await self.queue(ctx)
 
@@ -245,8 +245,7 @@ class Music(commands.Cog):
         if not self.is_index_valid(position, guild_id):
             await ctx.send(f"The values have to be within the range of *1 - {original_queue_length}!*")
             return await self.queue(ctx)
-
-        if ctx.voice_client.is_playing():
+        elif ctx.voice_client.is_playing():
             await self.stop(ctx)
 
         queue = self.db.get_queue_with_guild_id(guild_id)
@@ -288,10 +287,9 @@ class Music(commands.Cog):
 
         if not isinstance(volume, int):
             return await ctx.send("The volume provided was not an int.")
-
-        if ctx.voice_client is None:
+        elif ctx.voice_client is None:
             return await ctx.send("Not connected to a voice channel!")
-        if volume is None:
+        elif volume is None:
             return await ctx.send(f'***Current Volume:*** {ctx.voice_client.source.volume*100}%')
 
         if volume < 0:
@@ -307,7 +305,7 @@ class Music(commands.Cog):
         """Stops the current song"""
         if ctx.voice_client is None:
             await ctx.send(f"Not connected to a voice channel!")
-        if not ctx.voice_client.is_playing():
+        elif not ctx.voice_client.is_playing():
             await ctx.send(f"Not connected to a voice channel!")
 
         self.db.delete_now_playing(ctx.guild.id)
