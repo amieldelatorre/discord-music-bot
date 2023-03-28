@@ -17,9 +17,6 @@ class IDb(abc.ABC):
     def add_to_queue(self, guild_id, item):
         pass
 
-    def add_to_now_playing(self, guild_id, item):
-        pass
-
     def set_queue(self, guild_id, queue):
         pass
 
