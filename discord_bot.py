@@ -36,7 +36,7 @@ class Music(commands.Cog):
 
     def is_index_valid(self, index, guild_id):
         self.log(logging.INFO, f"Is the index for a queue valid.")
-        return index >= 1 and index <= self.db.queue_size(guild_id)
+        return 1 <= index <= self.db.queue_size(guild_id)
 
     @commands.command()
     async def join(self, ctx):
