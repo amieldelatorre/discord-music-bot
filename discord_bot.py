@@ -13,26 +13,36 @@ class Music(commands.Cog):
         self.bot = bot
         self.db = InMemoryDb()
 
+    def log(self, log_level, message):
+        self.bot.logger.log(log_level, message)
+
     async def auto_disconnect(self, ctx):
+        inactivity_timer = 30
         voice_client = ctx.voice_client
-        await asyncio.sleep(30)
+        await asyncio.sleep(inactivity_timer)
         if not voice_client.is_playing():
+            self.log(logging.INFO, f"Disconnecting after {inactivity_timer} seconds of inactivity.")
             asyncio.run_coroutine_threadsafe(self.leave(ctx), self.bot.loop)
             asyncio.run_coroutine_threadsafe(ctx.send("Leaving due to inactivity."), self.bot.loop)
 
     def clean_up(self, guild_id):
+        self.log(logging.INFO, f"Cleaning up the queue and the now playing values")
         self.db.delete_queue(guild_id)
         self.db.delete_now_playing(guild_id)
 
     def is_there_item_in_queue(self, guild_id):
+        self.log(logging.INFO, f"Check if there are items in a guild's queue.")
         return self.db.guild_id_in_queues(guild_id) and self.db.queue_size(guild_id) > 0
 
     def is_index_valid(self, index, guild_id):
+        self.log(logging.INFO, f"Is the index for a queue valid.")
         return index >= 1 or index <= self.db.queue_size(guild_id)
 
     @commands.command()
     async def join(self, ctx):
         """Joins a voice channel"""
+
+        self.log(logging.INFO, f"Joining a channel.")
 
         if not ctx.message.author.voice:
             return await ctx.send("{} is not connected to a voice channel".format(ctx.message.author.name))
@@ -44,11 +54,11 @@ class Music(commands.Cog):
             await ctx.voice_client.move_to(voice_channel)
         await ctx.guild.change_voice_state(channel=voice_channel, self_mute=False, self_deaf=True)
 
-        await self.auto_disconnect(ctx)
-
     @commands.command()
     async def leave(self, ctx):
         """Leaves a voice channel"""
+
+        self.log(logging.INFO, f"Leaving the voice channel.")
 
         voice_client = ctx.message.guild.voice_client
         if voice_client is not None and voice_client.is_connected():
@@ -61,6 +71,8 @@ class Music(commands.Cog):
     @commands.command()
     async def play(self, ctx, *, url):
         """Downloads and then plays"""
+
+        self.log(logging.INFO, f"Play a song.")
 
         if ctx.voice_client.is_paused():
             ctx.voice_client.resume()
@@ -94,6 +106,8 @@ class Music(commands.Cog):
 
             self.db.set_now_playing(guild_id, now_playing)
 
+            self.log(logging.INFO, f"Playing the song.")
+
             voice_client.play(player,
                               after=lambda e: asyncio.run_coroutine_threadsafe(self.play_next(ctx), self.bot.loop))
             asyncio.run_coroutine_threadsafe(ctx.send(
@@ -102,6 +116,8 @@ class Music(commands.Cog):
             ), self.bot.loop)
 
     async def play_next(self, ctx):
+        self.log(logging.INFO, f"Attempting to play the next song.")
+
         guild_id = ctx.guild.id
         voice_client = ctx.voice_client
 
@@ -114,6 +130,10 @@ class Music(commands.Cog):
 
     @commands.command()
     async def now_playing(self, ctx):
+        """Show the currently playing song."""
+
+        self.log(logging.INFO, f"Showing the current song.")
+
         guild_id = ctx.guild.id
         if not self.db.guild_id_in_now_playings(guild_id):
             return await ctx.send("Not currently playing a song!")
@@ -125,9 +145,12 @@ class Music(commands.Cog):
             f'{np["url"]}'
         )
 
+        self.log(logging.INFO, f"Showing the current song.")
+
     @commands.command()
     async def pause(self, ctx):
         """Pauses the current song"""
+
         if ctx.voice_client is None:
             return await ctx.send("Not connected to a voice channel!")
         elif not ctx.voice_client.is_playing():
@@ -136,11 +159,13 @@ class Music(commands.Cog):
             return await ctx.send("The song is already paused!")
 
         ctx.voice_client.pause()
+        self.log(logging.INFO, f"Pausing the playing song.")
         await ctx.send("Paused the song!")
 
     @commands.command()
     async def resume(self, ctx):
-        """Pauses the paused song"""
+        """Resumes the paused song"""
+
         if ctx.voice_client is None:
             return await ctx.send("Not connected to a voice channel!")
         elif ctx.voice_client.is_playing():
@@ -149,6 +174,7 @@ class Music(commands.Cog):
             return await ctx.send("There is no song paused!")
 
         ctx.voice_client.resume()
+        self.log(logging.INFO, f"Resuming the paused song.")
         await ctx.send("Resumed the song!")
 
     @commands.command()
@@ -162,12 +188,15 @@ class Music(commands.Cog):
         elif self.db.queue_size(ctx.guild.id) == 0:
             await ctx.send("This is the last song in the queue!")
 
+        self.log(logging.INFO, f"Skipping the current song.")
         await self.stop(ctx)
         await self.play_next(ctx)
 
     @commands.command()
     async def queue(self, ctx):
         """Shows current queue"""
+
+        self.log(logging.INFO, f"Showing items in queue.")
 
         if not self.is_there_item_in_queue(ctx.guild.id):
             return await ctx.send("There are currently no songs in the queue!")
@@ -203,6 +232,7 @@ class Music(commands.Cog):
         self.db.set_queue(guild_id, queue)
 
         await ctx.send(f"Removed the song from queue: {url}")
+        self.log(logging.INFO, f"Removed the song from queue: {url}")
         return await self.queue(ctx)
 
     @commands.command()
@@ -231,6 +261,7 @@ class Music(commands.Cog):
         self.db.set_queue(guild_id, queue)
 
         await ctx.send(f"Swapped the songs in position *{first}* and *{second}* of the queue.")
+        self.log(logging.INFO, f"Swapped the songs in position *{first}* and *{second}* of the queue.")
         await self.queue(ctx)
 
     @commands.command()
@@ -253,6 +284,7 @@ class Music(commands.Cog):
         self.db.set_queue(guild_id, queue)
 
         await ctx.send(f"Jumping to the song in position *{position}* of the queue.")
+        self.log(logging.INFO, "Jumped to the song in position *{position}* of the queue.")
         await self.queue(ctx)
         return await self.play_next(ctx)
 
@@ -278,6 +310,7 @@ class Music(commands.Cog):
         queue.insert(index_to - 1, song)
         self.db.set_queue(guild_id, queue)
 
+        self.log(logging.INFO, "Moved the song in position {index_from} to {index_to} of the queue.")
         await ctx.send(f"Moved the song in position {index_from} to {index_to} of the queue.")
         return await self.queue(ctx)
 
@@ -290,6 +323,7 @@ class Music(commands.Cog):
         elif ctx.voice_client is None:
             return await ctx.send("Not connected to a voice channel!")
         elif volume is None:
+            self.log(logging.INFO, "Showing current volume.")
             return await ctx.send(f'***Current Volume:*** {ctx.voice_client.source.volume*100}%')
 
         if volume < 0:
@@ -297,12 +331,16 @@ class Music(commands.Cog):
         elif volume > 150:
             return await ctx.send(f'Volume *{volume}*% is too high!')
 
+        self.log(logging.INFO, "Changing the volume")
         ctx.voice_client.source.volume = volume / 100
         await ctx.send(f"Changed volume to {volume}%")
 
     @commands.command()
     async def stop(self, ctx):
         """Stops the current song"""
+
+        self.log(logging.INFO, "Stopping the current song. ")
+
         if ctx.voice_client is None:
             await ctx.send(f"Not connected to a voice channel!")
         elif not ctx.voice_client.is_playing():
@@ -314,6 +352,10 @@ class Music(commands.Cog):
 
     @play.before_invoke
     async def ensure_voice(self, ctx):
+        """Makes sure that the user is connected to a voice channel before a play command is executed"""
+
+        self.log(logging.INFO, "Checking voice before going to the play command.")
+
         if ctx.voice_client is None:
             if ctx.author.voice:
                 await self.join(ctx)
