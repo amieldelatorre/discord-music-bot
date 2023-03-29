@@ -53,6 +53,7 @@ class Music(commands.Cog):
         else:
             await ctx.voice_client.move_to(voice_channel)
         await ctx.guild.change_voice_state(channel=voice_channel, self_mute=False, self_deaf=True)
+        asyncio.run_coroutine_threadsafe(self.auto_disconnect(ctx), self.bot.loop)
 
     @commands.command()
     async def leave(self, ctx):
