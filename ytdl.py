@@ -1,12 +1,19 @@
 from __future__ import unicode_literals
+from dotenv import load_dotenv
 import asyncio
+import os
 import discord
 import yt_dlp as youtube_dl
 
 
+load_dotenv()
+pwd = os.getcwd()
+download_subdirectory = os.getenv("downloads_subdirectory")
+download_path = os.path.join(pwd, download_subdirectory)
+
 ytdl_format_options = {
     'format': 'bestaudio/best',
-    'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
+    'outtmpl': os.path.join(download_path, '%(extractor)s-%(id)s-%(title)s.%(ext)s'),
     'restrictfilenames': True,
     'noplaylist': True,
     'ignoreerrors': False,
