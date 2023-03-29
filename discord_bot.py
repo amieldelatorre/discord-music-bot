@@ -81,10 +81,13 @@ class Music(commands.Cog):
         guild_id = ctx.guild.id
         await ctx.send(f'***Searching for song:*** {url}')
 
-        self.db.add_to_queue(guild_id, url)
+        async with ctx.typing():
+            player = await YTDLSource.from_url(url, loop=self.bot.loop)
+
+        self.db.add_to_queue(guild_id, player)
         if ctx.voice_client.is_playing():
             await ctx.send(
-                f'Added song {url} to queue.\n'
+                f'Added song ***{player.title}*** to queue.\n'
                 f'*Number of items in queue*: {self.db.queue_size(guild_id)}'
             )
             return await self.queue(ctx)
@@ -94,27 +97,20 @@ class Music(commands.Cog):
             await self.play_song(ctx, guild_id, voice_client)
 
     async def play_song(self, ctx, guild_id, voice_client):
-        async with ctx.typing():
-            queue = self.db.get_queue_with_guild_id(guild_id)
-            url = queue.pop(0)
-            self.db.set_queue(guild_id, queue)
-            player = await YTDLSource.from_url(url, loop=self.bot.loop)
+        queue = self.db.get_queue_with_guild_id(guild_id)
+        player = queue.pop(0)
+        self.db.set_queue(guild_id, queue)
 
-            now_playing = {
-                "title": player.title,
-                "url": player.data["original_url"]
-            }
+        self.db.set_now_playing(guild_id, player)
 
-            self.db.set_now_playing(guild_id, now_playing)
+        self.log(logging.INFO, f"Playing the song.")
 
-            self.log(logging.INFO, f"Playing the song.")
-
-            voice_client.play(player,
-                              after=lambda e: asyncio.run_coroutine_threadsafe(self.play_next(ctx), self.bot.loop))
-            asyncio.run_coroutine_threadsafe(ctx.send(
-                f'***Now playing:*** {player.title}\n'
-                f'{player.data["original_url"]}'
-            ), self.bot.loop)
+        voice_client.play(player,
+                          after=lambda e: asyncio.run_coroutine_threadsafe(self.play_next(ctx), self.bot.loop))
+        asyncio.run_coroutine_threadsafe(ctx.send(
+            f'***Now playing:*** {player.title}\n'
+            f'{player.data["original_url"]}'
+        ), self.bot.loop)
 
     async def play_next(self, ctx):
         self.log(logging.INFO, f"Attempting to play the next song.")
@@ -142,8 +138,8 @@ class Music(commands.Cog):
         np = self.db.get_now_playing_with_guild_id(guild_id)
 
         await ctx.send(
-            f'***Current Song:*** {np["title"]}\n'
-            f'{np["url"]}'
+            f'***Current Song:*** {np.title}\n'
+            f'{np.data["original_url"]}'
         )
 
         self.log(logging.INFO, f"Showing the current song.")
@@ -204,8 +200,8 @@ class Music(commands.Cog):
         else:
             song_list = ""
             num = 1
-            for url in self.db.get_queue_with_guild_id(ctx.guild.id):
-                song_list += f"> **{num}.** {url}\n"
+            for player in self.db.get_queue_with_guild_id(ctx.guild.id):
+                song_list += f"> **{num}.** {player.title}\n"
                 num += 1
 
             return await ctx.send(
@@ -229,11 +225,11 @@ class Music(commands.Cog):
             return await self.queue(ctx)
 
         queue = self.db.get_queue_with_guild_id(guild_id)
-        url = queue.pop(index - 1)
+        player = queue.pop(index - 1)
         self.db.set_queue(guild_id, queue)
 
-        await ctx.send(f"Removed the song from queue: {url}")
-        self.log(logging.INFO, f"Removed the song from queue: {url}")
+        await ctx.send(f"Removed the song from queue: {player.title}")
+        self.log(logging.INFO, f"Removed the song from queue: {player.title}")
         return await self.queue(ctx)
 
     @commands.command()
