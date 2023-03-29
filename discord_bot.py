@@ -20,7 +20,7 @@ class Music(commands.Cog):
         inactivity_timer = 30
         voice_client = ctx.voice_client
         await asyncio.sleep(inactivity_timer)
-        if not voice_client.is_playing():
+        if voice_client is not None and not voice_client.is_playing() and voice_client.is_connected():
             self.log(logging.INFO, f"Disconnecting after {inactivity_timer} seconds of inactivity.")
             asyncio.run_coroutine_threadsafe(self.leave(ctx), self.bot.loop)
             asyncio.run_coroutine_threadsafe(ctx.send("Leaving due to inactivity."), self.bot.loop)
@@ -399,7 +399,7 @@ async def on_voice_state_update(member, before, after):
             if voice_client.is_playing():
                 voice_client.stop()
 
-            if voice_client.guild.id in bot.get_cog("Music").queues:
+            if bot.get_cog("Music").db.guild_id_in_queues(voice_client.guild.id):
                 bot.get_cog("Music").clean_up(voice_client.guild.id)
             return await voice_client.disconnect()
     else:
