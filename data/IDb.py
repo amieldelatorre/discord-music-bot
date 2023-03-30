@@ -37,3 +37,24 @@ class IDb(abc.ABC):
 
     def queue_size(self, guild_id):
         pass
+
+    def clean_up_for_guild_id(self, guild_id):
+        pass
+
+    def is_there_item_in_queue_for_guild_id(self, guild_id):
+        pass
+
+    def is_index_valid(self, index, guild_id):
+        pass
+
+    def pop_index_from_queue(self, index, guild_id):
+        pass
+
+    def queue_swap(self, guild_id, index1, index2):
+        pass
+
+    def queue_jump(self, guild_id, index):
+        pass
+
+    def queue_move(self, guild_id, original_index, new_index):
+        pass
