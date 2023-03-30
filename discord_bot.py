@@ -2,6 +2,7 @@ import asyncio
 import os
 import discord
 import logging
+import json
 from dotenv import load_dotenv
 from discord.ext import commands
 from ytdl import YTDLSource
@@ -360,15 +361,12 @@ bot = commands.Bot(
 
 @bot.event
 async def on_guild_join(guild):
-    print(f"[join-guild] Joined guild: {guild.id}")
-    print("I JOINED A GUILD")
+    bot.logger.log(logging.INFO, f"[join-guild] Joined guild: {guild.id}")
 
 
 @bot.event
 async def on_ready():
-    running_message = f'[start] Logged in as {bot.user} (ID: {bot.user.id})'
-    print(running_message)
-    print('-' * len(running_message))
+    bot.logger.log(logging.INFO, f'[start] Logged in as {bot.user} (ID: {bot.user.id})')
 
 
 @bot.event
@@ -387,7 +385,7 @@ async def on_voice_state_update(member, before, after):
                 voice_client.stop()
 
             if bot.get_cog("Music").db.guild_id_in_queues(voice_client.guild.id):
-                bot.get_cog("Music").log(f"Cleaning up the queue and the now playing values")
+                bot.logger.log(logging.INFO, f"Cleaning up the queue and the now playing values")
                 bot.get_cog("Music").db.clean_up_for_guild_id(voice_client.guild.id)
             return await voice_client.disconnect()
     else:
@@ -415,9 +413,17 @@ def get_voice_client(channel):
 async def main():
     async with bot:
         load_dotenv()
+
         discord_token = os.getenv("discord_token")
         logging_level = os.getenv("logging_level")
-        logging.basicConfig(level=logging_level)
+        log_format = json.dumps({'time': '%(asctime)s', 'name': '%(name)s', 'level': '%(levelname)s',
+                                 'message': '%(message)s'})
+        logging.basicConfig(
+            format=log_format,
+            level=logging_level,
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+
         logger = logging.getLogger()
 
         bot.logger = logger
