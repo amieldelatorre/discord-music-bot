@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from discord.ext import commands
 from ytdl import YTDLSource
 from data.InMemoryDb import InMemoryDb
+from ytdl import download_path
 
 
 class Music(commands.Cog):
@@ -26,6 +27,14 @@ class Music(commands.Cog):
             self.log(logging.INFO, f"Disconnecting after {inactivity_timer} seconds of inactivity.")
             asyncio.run_coroutine_threadsafe(self.leave(ctx), self.bot.loop)
             asyncio.run_coroutine_threadsafe(ctx.send("Leaving due to inactivity."), self.bot.loop)
+
+    def delete_file(self, player):
+        if not self.db.player_in_any_queue(player) and not self.db.player_in_any_now_playing(player):
+            filepath = os.path.join(download_path, f"{player.data['id']}.mp3")
+            try:
+                os.remove(filepath)
+            except Exception as e:
+                self.log(logging.ERROR, f"Error deleting file. Message {e}")
 
     @commands.command()
     async def join(self, ctx):
@@ -177,6 +186,9 @@ class Music(commands.Cog):
 
         self.log(logging.INFO, f"Skipping the current song.")
         ctx.voice_client.pause()
+        finished_song_player = self.db.get_now_playing_with_guild_id(ctx.guild.id)
+        self.db.delete_now_playing(ctx.guild.id)
+        self.delete_file(finished_song_player)
         await self.play_next(ctx)
 
     @commands.command()
