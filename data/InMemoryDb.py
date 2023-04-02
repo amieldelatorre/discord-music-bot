@@ -96,3 +96,14 @@ class InMemoryDb(IDb):
         player = self.__queues[guild_id].pop(original_index - 1)
         self.__queues[guild_id].insert(new_index - 1, player)
         return True
+
+    def player_in_any_queue(self, player):
+        for queue in self.__queues.values():
+            for item in queue:
+                if player.title == item.title and player.data["original_url"] == item.data["original_url"]:
+                    return True
+        return False
+
+    def player_in_any_now_playing(self, player):
+        return any(player.title == queue_item.title and player.data["original_url"] == queue_item.data["original_url"]
+                   for queue_item in self.__now_playings.values())

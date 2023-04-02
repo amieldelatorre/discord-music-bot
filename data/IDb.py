@@ -58,3 +58,9 @@ class IDb(abc.ABC):
 
     def queue_move(self, guild_id, original_index, new_index):
         pass
+
+    def player_in_any_queue(self, player):
+        pass
+
+    def player_in_any_now_playing(self, player):
+        pass

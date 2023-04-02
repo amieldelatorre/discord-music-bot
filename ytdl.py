@@ -13,7 +13,7 @@ download_path = os.path.join(pwd, download_subdirectory)
 
 ytdl_format_options = {
     'format': 'bestaudio/best',
-    'outtmpl': os.path.join(download_path, '%(extractor)s-%(id)s-%(title)s.%(ext)s'),
+    'outtmpl': os.path.join(download_path, '%(id)s.mp3'),
     'restrictfilenames': True,
     'noplaylist': True,
     'ignoreerrors': False,
