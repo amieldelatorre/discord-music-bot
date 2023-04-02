@@ -30,11 +30,52 @@ class Music(commands.Cog):
 
     def delete_file(self, player):
         if not self.db.player_in_any_queue(player) and not self.db.player_in_any_now_playing(player):
-            filepath = os.path.join(download_path, f"{player.data['id']}.mp3")
+            filename = f"{player.data['id']}.mp3"
+            filepath = os.path.join(download_path, filename)
             try:
                 os.remove(filepath)
+                self.log(logging.INFO, f"Deleted file {filename}")
             except Exception as e:
-                self.log(logging.ERROR, f"Error deleting file. Message {e}")
+                self.log(logging.ERROR, f"Error deleting file. Message: {e}")
+
+    def dequeue_song(self, index, guild_id):
+        player = self.db.pop_index_from_queue(index, guild_id)
+        self.delete_file(player)
+        return player
+
+    def stop_guild(self, ctx):
+        players = self.db.get_queue_with_guild_id(ctx.guild.id)
+        players.append(self.db.get_now_playing_with_guild_id(ctx.guild.id))
+
+        self.db.clean_up_for_guild_id(ctx.guild.id)
+        ctx.voice_client.stop()
+
+        for player in players:
+            self.delete_file(player)
+
+    def jump_to_song(self, ctx, position):
+        queue = self.db.get_queue_with_guild_id(ctx.guild.id)
+        players_removed = queue[:position - 1]
+
+        jump_result = self.db.queue_jump(ctx.guild.id, position)
+        ctx.voice_client.stop()
+
+        for player in players_removed:
+            self.delete_file(player)
+
+        return jump_result
+
+    def remove_guild_items(self, guild_id):
+        queue_players = self.db.get_queue_with_guild_id(guild_id)
+        now_playing_player = self.db.get_now_playing_with_guild_id(guild_id)
+
+        self.db.clean_up_for_guild_id(guild_id)
+
+        if queue_players is not None:
+            for player in queue_players:
+                self.delete_file(player)
+        if now_playing_player is not None:
+            self.delete_file(now_playing_player)
 
     @commands.command()
     async def join(self, ctx):
@@ -64,7 +105,7 @@ class Music(commands.Cog):
             await voice_client.disconnect()
             await ctx.send("Disconnected from the voice channel.")
             self.log(logging.INFO, f"Cleaning up the queue and the now playing values")
-            self.db.clean_up_for_guild_id(ctx.guild.id)
+            self.remove_guild_items(ctx.guild.id)
         else:
             await ctx.send("Not connected to a voice channel.")
 
@@ -117,7 +158,9 @@ class Music(commands.Cog):
         guild_id = ctx.guild.id
         voice_client = ctx.voice_client
 
+        previous_now_playing_player = self.db.get_now_playing_with_guild_id(guild_id)
         self.db.delete_now_playing(guild_id)
+        self.delete_file(previous_now_playing_player)
 
         if self.db.is_there_item_in_queue_for_guild_id(guild_id):
             await self.play_song(ctx, guild_id, voice_client)
@@ -185,11 +228,9 @@ class Music(commands.Cog):
             await ctx.send("This is the last song in the queue!")
 
         self.log(logging.INFO, f"Skipping the current song.")
-        ctx.voice_client.pause()
-        finished_song_player = self.db.get_now_playing_with_guild_id(ctx.guild.id)
-        self.db.delete_now_playing(ctx.guild.id)
-        self.delete_file(finished_song_player)
-        await self.play_next(ctx)
+        ctx.voice_client.stop()
+        # Stopping the voice client automatically plays the next song because this goes back to the play_next function
+        # The play_next function will also delete the currently playing file
 
     @commands.command()
     async def queue(self, ctx):
@@ -226,7 +267,7 @@ class Music(commands.Cog):
             await ctx.send(f"The values have to be within the range of *1 - {self.db.queue_size(guild_id)}!*")
             return await self.queue(ctx)
 
-        player = self.db.pop_index_from_queue(index, guild_id)
+        player = self.dequeue_song(index, guild_id)
         if player is None:
             return await ctx.send(f"Error popping index from queue.")
 
@@ -272,14 +313,13 @@ class Music(commands.Cog):
         if not self.db.is_index_valid(position, guild_id):
             await ctx.send(f"The values have to be within the range of *1 - {original_queue_length}!*")
             return await self.queue(ctx)
-        elif ctx.voice_client.is_playing():
-            ctx.voice_client.pause()
 
-        jump_result = self.db.queue_jump(guild_id, position)
+        jump_result = self.jump_to_song(ctx, position)
         if jump_result:
             await ctx.send(f"Jumping to the song in position *{position}* of the queue.")
             self.log(logging.INFO, "Jumped to the song in position *{position}* of the queue.")
-            await self.play_next(ctx)
+            # Stopping the voice client automatically plays the next song because this goes
+            # back to the play_next function
         else:
             await ctx.send(f"Failed to jump to position *{position}* of the queue.")
         return await self.queue(ctx)
@@ -342,8 +382,8 @@ class Music(commands.Cog):
         elif not ctx.voice_client.is_playing():
             await ctx.send(f"Not connected to a voice channel!")
 
-        self.db.clean_up_for_guild_id(ctx.guild.id)
-        ctx.voice_client.stop()
+        self.stop_guild(ctx)
+
         await ctx.send(f"Song has been stopped and queue has been cleared.")
         return await self.queue(ctx)
 
@@ -397,9 +437,14 @@ async def on_voice_state_update(member, before, after):
                 voice_client.stop()
 
             if bot.get_cog("Music").db.guild_id_in_queues(voice_client.guild.id):
-                bot.logger.log(logging.INFO, f"Cleaning up the queue and the now playing values")
-                bot.get_cog("Music").db.clean_up_for_guild_id(voice_client.guild.id)
+                bot.get_cog("Music").log(logging.INFO, f"Cleaning up the queue and the now playing values")
+                bot.get_cog("Music").remove_guild_items(voice_client.guild.id)
             return await voice_client.disconnect()
+    elif bot.application_id == member.id and (channel_before is not None and channel_after is None):
+        voice_client = get_voice_client(channel_before)
+        bot.get_cog("Music").log(logging.INFO, f"Cleaning up the queue and the now playing values")
+        bot.get_cog("Music").remove_guild_items(voice_client.guild.id)
+        return
     else:
         return
 
