@@ -19,7 +19,7 @@ class Music(commands.Cog):
         self.bot.logger.log(log_level, message)
 
     async def auto_disconnect(self, ctx):
-        inactivity_timer = 30
+        inactivity_timer = 300
         voice_client = ctx.voice_client
         await asyncio.sleep(inactivity_timer)
         if (voice_client is not None and not voice_client.is_playing() and not voice_client.is_paused()
