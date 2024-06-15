@@ -367,9 +367,10 @@ class Music(commands.Cog):
         elif volume > 150:
             return await ctx.send(f'Volume *{volume}*% is too high!')
 
-        self.log(logging.INFO, "Changing the volume")
-        ctx.voice_client.source.volume = volume / 100
-        await ctx.send(f"Changed volume to {volume}%")
+        if ctx.voice_client.source is not None:
+            self.log(logging.INFO, "Changing the volume")
+            ctx.voice_client.source.volume = volume / 100
+            await ctx.send(f"Changed volume to {volume}%")
 
     @commands.command()
     async def stop(self, ctx):
