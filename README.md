@@ -1,5 +1,17 @@
 # discord-music-bot
 
+## Full Install
+
+### Install with `requirements.txt`
+```bash
+pip install -r requirements.txt
+```
+
+### Direct Installation (Without `requirements.txt` file)
+```bash
+pip install discord.py[voice] python-dotenv yt-dlp
+```
+
 ## Resources 
 - Initial Implementation after Idea
   - https://medium.com/pythonland/build-a-discord-bot-in-python-that-plays-music-and-send-gifs-856385e605a1
