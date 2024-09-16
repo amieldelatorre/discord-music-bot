@@ -1,8 +1,7 @@
-version: "3"
-
 services:
   musicbot:
-    image: musicbot:latest
+    build: ./
+    pull_policy: build
     container_name: musicbot
     restart: unless-stopped
     env_file:
