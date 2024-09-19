@@ -1,7 +1,7 @@
 import persistence
 from .default_bot import default_bot, get_default_bot_config
 from .music_bot import MusicBot, get_music_bot_config
-from config import get_required_environment_variable, get_environment_variable_with_default, logger, set_log_level
+from config import set_log_level
 from dotenv import load_dotenv
 
 
@@ -29,5 +29,26 @@ async def main():
         key_value_repository=key_value_repo
     )
 
-    await default_bot.add_cog(MusicBot(default_bot, musicbot_config, queue_service, key_value_service))
+    if musicbot_config.enable_stats:
+        opensearch_client = persistence.opensearch_client.OpenSearchClient(
+            host=musicbot_config.opensearch_host,
+            port=musicbot_config.opensearch_port,
+            username=musicbot_config.opensearch_username,
+            password=musicbot_config.opensearch_password,
+            verify_certs=musicbot_config.opensearch_verify_certs,
+            ssl_assert_hostname=musicbot_config.opensearch_ssl_assert_hostname,
+            ssl_show_warn=musicbot_config.opensearch_ssl_show_warn
+        )
+        analytics_repo = persistence.analytics_repository.OpenSearchAnalyticsRepository(
+            opensearch_client
+        )
+    else:
+        analytics_repo = persistence.analytics_repository.DisabledAnalyticsRepository()
+
+    event_analytics_service = persistence.analytics_service.EventAnalyticsService(analytics_repo)
+    song_analytics_service = persistence.analytics_service.SongAnalyticsService(analytics_repo)
+
+
+    await default_bot.add_cog(MusicBot(default_bot, musicbot_config, queue_service, key_value_service,
+                                       event_analytics_service, song_analytics_service))
     await default_bot.start(global_config.discord_token)

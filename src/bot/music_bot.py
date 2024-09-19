@@ -9,6 +9,7 @@ from discord.ext import commands, tasks
 from config import logger,  get_required_environment_variable, get_environment_variable_with_default
 from persistence.queue_service import QueueService
 from persistence.key_value_service import KeyValueService
+from persistence.analytics_service import EventAnalyticsService, SongAnalyticsService
 
 
 @dataclass
@@ -22,6 +23,14 @@ class MusicBotConfig:
     mongodb_username: str
     mongodb_password: str
     enable_stats: bool
+
+    opensearch_host: str
+    opensearch_port: int
+    opensearch_username: str
+    opensearch_password: str
+    opensearch_verify_certs: bool
+    opensearch_ssl_assert_hostname: bool
+    opensearch_ssl_show_warn: bool
 
 
 class DiscordPlayer(discord.PCMVolumeTransformer):
@@ -52,6 +61,14 @@ def get_music_bot_config() -> MusicBotConfig:
     logger.log(logging.INFO, f"AUTO_DISCONNECT_TIMER_SECONDS: {auto_disconnect_timer_seconds}")
     logger.log(logging.INFO, f"ENABLE_STATS: {enable_stats}")
 
+    opensearch_host = get_required_environment_variable("OPENSEARCH_HOST") if enable_stats else "not required"
+    opensearch_port = int(get_required_environment_variable("OPENSEARCH_PORT")) if enable_stats else 0
+    opensearch_username = get_required_environment_variable("OPENSEARCH_USERNAME") if enable_stats else "not required"
+    opensearch_password = get_required_environment_variable("OPENSEARCH_PASSWORD") if enable_stats else "not required"
+    opensearch_verify_certs = get_environment_variable_with_default("OPENSEARCH_VERIFY_CERTS", "False").lower() == "true"
+    opensearch_ssl_assert_hostname = get_environment_variable_with_default("OPENSEARCH_SSL_ASSERT_HOSTNAME", "False").lower() == "true"
+    opensearch_ssl_show_warn = get_environment_variable_with_default("OPENSEARCH_SSL_SHOW_WARN", "False").lower() == "true"
+
     return MusicBotConfig(
         auto_disconnect_timer_seconds=auto_disconnect_timer_seconds,
         downloads_directory=downloads_directory,
@@ -62,6 +79,13 @@ def get_music_bot_config() -> MusicBotConfig:
         mongodb_database=mongodb_database,
         mongodb_username=mongodb_username,
         mongodb_password=mongodb_password,
+        opensearch_host=opensearch_host,
+        opensearch_port=opensearch_port,
+        opensearch_username=opensearch_username,
+        opensearch_password=opensearch_password,
+        opensearch_verify_certs=opensearch_verify_certs,
+        opensearch_ssl_assert_hostname=opensearch_ssl_assert_hostname,
+        opensearch_ssl_show_warn=opensearch_ssl_show_warn,
     )
 
 
@@ -70,11 +94,16 @@ class MusicBot(commands.Cog):
                  bot: commands.Bot,
                  config: MusicBotConfig,
                  music_queue_service: QueueService,
-                 now_playing_service: KeyValueService):
+                 now_playing_service: KeyValueService,
+                 event_analytics_service: EventAnalyticsService,
+                 song_analytics_service: SongAnalyticsService
+                 ):
         self.bot = bot
         self.config = config
         self.music_queue_service = music_queue_service
         self.now_playing_service = now_playing_service
+        self.event_analytics_service = event_analytics_service
+        self.song_analytics_service = song_analytics_service
 
         @bot.event
         async def on_voice_state_update(member, before, after):
