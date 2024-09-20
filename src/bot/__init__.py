@@ -1,4 +1,5 @@
 import persistence
+import opensearchpy
 from .default_bot import default_bot, get_default_bot_config
 from .music_bot import MusicBot, get_music_bot_config
 from config import set_log_level
@@ -30,11 +31,16 @@ async def main():
     )
 
     if musicbot_config.enable_stats:
-        opensearch_client = persistence.opensearch_client.OpenSearchClient(
-            host=musicbot_config.opensearch_host,
-            port=musicbot_config.opensearch_port,
-            username=musicbot_config.opensearch_username,
-            password=musicbot_config.opensearch_password,
+        opensearch_client = opensearchpy.AsyncOpenSearch(
+            hosts=[
+                {
+                    "host": musicbot_config.opensearch_host,
+                    "port": musicbot_config.opensearch_port
+                }
+            ],
+            http_compress=True,
+            http_auth=(musicbot_config.opensearch_username, musicbot_config.opensearch_password),
+            use_ssl=True,
             verify_certs=musicbot_config.opensearch_verify_certs,
             ssl_assert_hostname=musicbot_config.opensearch_ssl_assert_hostname,
             ssl_show_warn=musicbot_config.opensearch_ssl_show_warn
@@ -45,6 +51,9 @@ async def main():
     else:
         analytics_repo = persistence.analytics_repository.DisabledAnalyticsRepository()
 
+    print(await analytics_repo.delete("students", "7Ob9CZIBnN762RRFDNfw"))
+    await analytics_repo.client.close()
+    exit(1)
     event_analytics_service = persistence.analytics_service.EventAnalyticsService(analytics_repo)
     song_analytics_service = persistence.analytics_service.SongAnalyticsService(analytics_repo)
 
