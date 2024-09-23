@@ -2,6 +2,7 @@ import os
 import asyncio
 import typing
 import yt_dlp as youtube_dl
+import models
 
 
 async def _from_url(url: str, download_path: str, *, loop: asyncio.AbstractEventLoop = None, download: bool = False)\
@@ -24,6 +25,7 @@ async def _from_url(url: str, download_path: str, *, loop: asyncio.AbstractEvent
     filename = yt_dl.prepare_filename(song_data)
 
     data = {
+        "id": song_data.get("id"),
         "filename": filename,
         "title": song_data.get("title"),
         "url": song_data.get("original_url"),
@@ -65,6 +67,7 @@ async def search(search: str, download_path: str, loop: asyncio.AbstractEventLoo
     filename = yt_dl.prepare_filename(query_data)
 
     data = {
+        "id": query_data.get("id"),
         "filename": filename,
         "title": query_data.get("title"),
         "url": query_data.get("original_url"),
@@ -78,7 +81,7 @@ def file_exists(path: str) -> bool:
 
 
 async def yt_dl_from_url(url: str, download_path: str, *, loop: asyncio.AbstractEventLoop = None)\
-        -> typing.Dict:
+        -> models.Song:
     # TODO: Option to disable prefetch
     # search_data = await search(url, download_path)
     # data = await _from_url(url, download_path, loop=loop, download=False)
@@ -86,5 +89,12 @@ async def yt_dl_from_url(url: str, download_path: str, *, loop: asyncio.Abstract
     #     return data
 
     data = await _from_url(url, download_path, loop=loop, download=True)
+    song = models.Song(
+        song_id=data.get("id"),
+        title=data.get("title"),
+        url=data.get("url"),
+        author=data.get("author"),
+        filename=data.get("filename")
+    )
     return data
 

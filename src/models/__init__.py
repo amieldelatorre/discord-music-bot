@@ -1,19 +1,43 @@
 import typing
+import datetime
 from dataclasses import dataclass
 
 
 @dataclass
-class Song:
+class SongRequest:
+    song_id: str
+    requester_id: str
+    guild_id: str
     filename: str
     title: str
     url: str
     author: str
+    time_requested: datetime.datetime
+
+
+@dataclass
+class Song:
+    song_id: str
+    filename: str
+    title: str
+    url: str
+    author: str
+
+    def to_dict(self) -> typing.Dict:
+        return self.__dict__
 
 
 @dataclass
 class Queue:
     queue_id: str
     items: typing.List[typing.Any]
+
+    def items_to_dict(self) -> typing.List[typing.Dict]:
+        result = []
+        for item in self.items:
+            result.append(item.__dict__)
+
+        return result
 
     def append(self, item: typing.Any):
         if self.items is None:
