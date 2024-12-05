@@ -1,0 +1,66 @@
+services:
+  mongodb:
+    image: mongo:7.0.14
+    container_name: mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD:-password}
+      MONGO_INITDB_DATABASE: ${MONGODB_DATABASE:-root}
+    volumes:
+      - ./docker_data/mongodb:/data/db
+    ports:
+      - 27017:27017
+
+  mongo-express:
+      image: mongo-express:1.0.2
+      container_name: mongo-express
+      restart: unless-stopped
+      environment:
+        ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_USERNAME:-root}
+        ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_PASSWORD:-password}
+        ME_CONFIG_MONGODB_URL: mongodb://${MONGODB_USERNAME:-root}:${MONGODB_PASSWORD:-password}@mongodb:27017/
+        ME_CONFIG_BASICAUTH: false
+      ports:
+        - 8081:8081
+
+  opensearch-node-hot-1:
+    image: opensearchproject/opensearch:2.16.0
+    container_name: opensearch-node-hot-1
+    restart: unless-stopped
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node-hot-1
+      - discovery.seed_hosts=opensearch-node-hot-1
+      - cluster.initial_cluster_manager_nodes=opensearch-node-hot-1
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Pasdfghjkl!12}
+    ulimits:
+      memlock:
+          soft: -1
+          hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - ./docker_data/opensearch-node-hot-1:/usr/share/opensearch/data
+    ports:
+      - 9200:9200
+      - 9600:9600
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.16.0
+    container_name: opensearch-dashboards
+    restart: unless-stopped
+    ports:
+      - 5601:5601
+    environment:
+      OPENSEARCH_HOSTS: '["https://opensearch-node-hot-1:9200"]'
+#  musicbot:
+#    build: ./
+#    pull_policy: build
+#    container_name: musicbot
+#    restart: unless-stopped
+#    env_file:
+#      - .env
